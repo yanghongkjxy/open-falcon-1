@@ -1,3 +1,17 @@
+// Copyright 2017 Xiaomi, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package index
 
 import (
@@ -11,10 +25,10 @@ import (
 
 	tcache "github.com/toolkits/cache/localcache/timedcache"
 
-	cmodel "github.com/open-falcon/common/model"
-	cutils "github.com/open-falcon/common/utils"
-	"github.com/open-falcon/graph/g"
-	"github.com/open-falcon/graph/proc"
+	cmodel "github.com/open-falcon/falcon-plus/common/model"
+	cutils "github.com/open-falcon/falcon-plus/common/utils"
+	"github.com/open-falcon/falcon-plus/modules/graph/g"
+	"github.com/open-falcon/falcon-plus/modules/graph/proc"
 )
 
 const (
@@ -24,7 +38,7 @@ const (
 
 // item缓存
 var (
-	indexedItemCache   = NewIndexCacheBase(DefaultMaxCacheSize)
+	IndexedItemCache   = NewIndexCacheBase(DefaultMaxCacheSize)
 	unIndexedItemCache = NewIndexCacheBase(DefaultMaxCacheSize)
 )
 
@@ -45,7 +59,7 @@ func InitCache() {
 func GetTypeAndStep(endpoint string, counter string) (dsType string, step int, found bool) {
 	// get it from index cache
 	pk := cutils.Md5(fmt.Sprintf("%s/%s", endpoint, counter))
-	if icitem := indexedItemCache.Get(pk); icitem != nil {
+	if icitem := IndexedItemCache.Get(pk); icitem != nil {
 		if item := icitem.(*IndexCacheItem).Item; item != nil {
 			dsType = item.DsType
 			step = item.Step
@@ -137,7 +151,7 @@ func GetCounterFromCache(endpointId int64, counter string) (dsType string, step 
 func startCacheProcUpdateTask() {
 	for {
 		time.Sleep(DefaultCacheProcUpdateTaskSleepInterval)
-		proc.IndexedItemCacheCnt.SetCnt(int64(indexedItemCache.Size()))
+		proc.IndexedItemCacheCnt.SetCnt(int64(IndexedItemCache.Size()))
 		proc.UnIndexedItemCacheCnt.SetCnt(int64(unIndexedItemCache.Size()))
 		proc.EndpointCacheCnt.SetCnt(int64(dbEndpointCache.Size()))
 		proc.CounterCacheCnt.SetCnt(int64(dbEndpointCounterCache.Size()))

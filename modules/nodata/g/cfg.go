@@ -1,3 +1,17 @@
+// Copyright 2017 Xiaomi, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package g
 
 import (
@@ -12,8 +26,9 @@ type HttpConfig struct {
 	Listen  string `json:"listen"`
 }
 
-type QueryConfig struct {
-	QueryAddr      string `json:"queryAddr"`
+type PlusAPIConfig struct {
+	Addr           string `json:"addr"`
+	Token          string `json:"token"`
 	ConnectTimeout int32  `json:"connectTimeout"`
 	RequestTimeout int32  `json:"requestTimeout"`
 }
@@ -30,31 +45,18 @@ type CollectorConfig struct {
 	Concurrent int32 `json:"concurrent"`
 }
 
-type BlockConfig struct {
-	Enabled        bool    `json:"enabled"`
-	Threshold      int32   `json:"threshold"`
-	SetBlock       bool    `json:"setBlock"`
-	EnableGauss    bool    `json:"enableGauss"`
-	Hostname       string  `json:"hostname"`
-	FloodCounter   string  `json:"floodCounter"`
-	GaussFilter    float64 `json:"gaussFilter"`
-	Gauss3SigmaMin float64 `json:"gauss3SigmaMin"`
-	Gauss3SigmaMax float64 `json:"gauss3SigmaMax"`
-}
-
 type SenderConfig struct {
-	Enabled        bool         `json:"enabled"`
-	TransferAddr   string       `json:"transferAddr"`
-	ConnectTimeout int32        `json:"connectTimeout"`
-	RequestTimeout int32        `json:"requestTimeout"`
-	Batch          int32        `json:"batch"`
-	Block          *BlockConfig `json:"block"`
+	Enabled        bool   `json:"enabled"`
+	TransferAddr   string `json:"transferAddr"`
+	ConnectTimeout int32  `json:"connectTimeout"`
+	RequestTimeout int32  `json:"requestTimeout"`
+	Batch          int32  `json:"batch"`
 }
 
 type GlobalConfig struct {
 	Debug     bool             `json:"debug"`
 	Http      *HttpConfig      `json:"http"`
-	Query     *QueryConfig     `json:"query"`
+	PlusApi   *PlusAPIConfig   `json:"plus_api"`
 	Config    *NdConfig        `json:"config"`
 	Collector *CollectorConfig `json:"collector"`
 	Sender    *SenderConfig    `json:"sender"`

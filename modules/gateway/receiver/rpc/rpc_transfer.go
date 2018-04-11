@@ -1,3 +1,17 @@
+// Copyright 2017 Xiaomi, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package rpc
 
 import (
@@ -5,11 +19,11 @@ import (
 	"time"
 
 	pfc "github.com/niean/goperfcounter"
-	cmodel "github.com/open-falcon/common/model"
-	cutils "github.com/open-falcon/common/utils"
+	cmodel "github.com/open-falcon/falcon-plus/common/model"
+	cutils "github.com/open-falcon/falcon-plus/common/utils"
 
-	"github.com/open-falcon/gateway/g"
-	"github.com/open-falcon/gateway/sender"
+	"github.com/open-falcon/falcon-plus/modules/gateway/g"
+	"github.com/open-falcon/falcon-plus/modules/gateway/sender"
 )
 
 type Transfer int
@@ -18,57 +32,57 @@ func (this *Transfer) Ping(req cmodel.NullRpcRequest, resp *cmodel.SimpleRpcResp
 	return nil
 }
 
-func (t *Transfer) Update(args []*cmodel.MetricValue, reply *g.TransferResp) error {
+func (t *Transfer) Update(args []*cmodel.MetricValue, reply *cmodel.TransferResponse) error {
 	return RecvMetricValues(args, reply, "rpc")
 }
 
 // process new metric values
-func RecvMetricValues(args []*cmodel.MetricValue, reply *g.TransferResp, from string) error {
+func RecvMetricValues(args []*cmodel.MetricValue, reply *cmodel.TransferResponse, from string) error {
 	start := time.Now()
-	reply.ErrInvalid = 0
+	reply.Invalid = 0
 
 	items := []*cmodel.MetaData{}
 	for _, v := range args {
 		if v == nil {
-			reply.ErrInvalid += 1
+			reply.Invalid += 1
 			continue
 		}
 
 		// 历史遗留问题.
 		// 老版本agent上报的metric=kernel.hostname的数据,其取值为string类型,现在已经不支持了;所以,这里硬编码过滤掉
 		if v.Metric == "kernel.hostname" {
-			reply.ErrInvalid += 1
+			reply.Invalid += 1
 			continue
 		}
 
 		if v.Metric == "" || v.Endpoint == "" {
-			reply.ErrInvalid += 1
+			reply.Invalid += 1
 			continue
 		}
 
 		if v.Type != g.COUNTER && v.Type != g.GAUGE && v.Type != g.DERIVE {
-			reply.ErrInvalid += 1
+			reply.Invalid += 1
 			continue
 		}
 
 		if v.Value == "" {
-			reply.ErrInvalid += 1
+			reply.Invalid += 1
 			continue
 		}
 
 		if v.Step <= 0 {
-			reply.ErrInvalid += 1
+			reply.Invalid += 1
 			continue
 		}
 
 		if len(v.Metric)+len(v.Tags) > 510 {
-			reply.ErrInvalid += 1
+			reply.Invalid += 1
 			continue
 		}
 
 		errtags, tags := cutils.SplitTagsString(v.Tags)
 		if errtags != nil {
-			reply.ErrInvalid += 1
+			reply.Invalid += 1
 			continue
 		}
 
@@ -106,7 +120,7 @@ func RecvMetricValues(args []*cmodel.MetricValue, reply *g.TransferResp, from st
 		}
 
 		if !valid {
-			reply.ErrInvalid += 1
+			reply.Invalid += 1
 			continue
 		}
 
@@ -128,7 +142,7 @@ func RecvMetricValues(args []*cmodel.MetricValue, reply *g.TransferResp, from st
 		sender.Push2SendQueue(items)
 	}
 
-	reply.Msg = "ok"
+	reply.Message = "ok"
 	reply.Total = len(args)
 	reply.Latency = (time.Now().UnixNano() - start.UnixNano()) / 1000000
 

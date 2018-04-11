@@ -1,3 +1,17 @@
+// Copyright 2017 Xiaomi, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package rrdtool
 
 import (
@@ -11,11 +25,12 @@ import (
 	"time"
 
 	pfc "github.com/niean/goperfcounter"
-	"stathat.com/c/consistent"
+	"github.com/toolkits/consistent"
 
-	cmodel "github.com/open-falcon/common/model"
-	"github.com/open-falcon/graph/g"
-	"github.com/open-falcon/graph/store"
+	cmodel "github.com/open-falcon/falcon-plus/common/model"
+	cutils "github.com/open-falcon/falcon-plus/common/utils"
+	"github.com/open-falcon/falcon-plus/modules/graph/g"
+	"github.com/open-falcon/falcon-plus/modules/graph/store"
 )
 
 const (
@@ -94,7 +109,9 @@ func migrate_start(cfg *g.GlobalConfig) {
 	if cfg.Migrate.Enabled {
 		Consistent.NumberOfReplicas = cfg.Migrate.Replicas
 
-		for node, addr := range cfg.Migrate.Cluster {
+		nodes := cutils.KeysOfMap(cfg.Migrate.Cluster)
+		for _, node := range nodes {
+			addr := cfg.Migrate.Cluster[node]
 			Consistent.Add(node)
 			Net_task_ch[node] = make(chan *Net_task_t, 16)
 			clients[node] = make([]*rpc.Client, cfg.Migrate.Concurrency)
@@ -283,7 +300,7 @@ func fetch_rrd(client **rpc.Client, key string, addr string) error {
 
 		if err == nil {
 			done := make(chan error, 1)
-			io_task_chan <- &io_task_t{
+			io_task_chans[getIndex(md5)] <- &io_task_t{
 				method: IO_TASK_M_WRITE,
 				args: &g.File{
 					Filename: filename,

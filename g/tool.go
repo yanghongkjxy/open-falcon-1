@@ -1,43 +1,38 @@
+// Copyright 2017 Xiaomi, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package g
 
 import (
-	"fmt"
-	"github.com/toolkits/file"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
-func configExists(cfg string) bool {
-	if !file.IsExist(cfg) {
+func HasLogfile(name string) bool {
+	if _, err := os.Stat(LogPath(name)); err != nil {
 		return false
 	}
 	return true
 }
 
-func GetConfFileArgs(cfg string) ([]string, error) {
-	if !configExists(cfg) {
-		return nil, fmt.Errorf("expect config file: %s\n", cfg)
+func PreqOrder(moduleArgs []string) []string {
+	if len(moduleArgs) == 0 {
+		return []string{}
 	}
-	return []string{"-c", cfg}, nil
-}
 
-func ModuleExists(name string) error {
-	if Modules[name] {
-		return nil
-	}
-	return fmt.Errorf("This module doesn't exist: %s", name)
-}
-
-func CheckModulePid(name string) (string, error) {
-	output, err := exec.Command("pgrep", name).Output()
-	if err != nil {
-		return "", err
-	}
-	pidStr := strings.TrimSpace(string(output))
-	return pidStr, nil
-}
-
-func GetModuleArgsInOrder(moduleArgs []string) []string {
 	var modulesInOrder []string
 
 	// get arguments which are found in the order
@@ -64,15 +59,68 @@ func GetModuleArgsInOrder(moduleArgs []string) []string {
 	return modulesInOrder
 }
 
-func CheckModuleStatus(name string) int {
-	fmt.Print("Checking status [", ModuleApps[name], "]...")
-
-	pidStr, err := CheckModulePid(ModuleApps[name])
+func Rel(p string) string {
+	wd, err := os.Getwd()
 	if err != nil {
-		fmt.Println("not running!!")
-		return ModuleExistentNotRunning
+		return ""
 	}
 
-	fmt.Println("running with PID [", pidStr, "]!!")
-	return ModuleRunning
+	// filepath.Abs() returns an error only when os.Getwd() returns an error;
+	abs, _ := filepath.Abs(p)
+
+	r, err := filepath.Rel(wd, abs)
+	if err != nil {
+		return ""
+	}
+
+	return r
+}
+
+func HasCfg(name string) bool {
+	if _, err := os.Stat(Cfg(name)); err != nil {
+		return false
+	}
+	return true
+}
+
+func HasModule(name string) bool {
+	return Modules[name]
+}
+
+func setPid(name string) {
+	output, _ := exec.Command("pgrep", "-f", ModuleApps[name]).Output()
+	pidStr := strings.TrimSpace(string(output))
+	PidOf[name] = pidStr
+}
+
+func Pid(name string) string {
+	if PidOf[name] == "<NOT SET>" {
+		setPid(name)
+	}
+	return PidOf[name]
+}
+
+func IsRunning(name string) bool {
+	setPid(name)
+	return Pid(name) != ""
+}
+
+func RmDup(args []string) []string {
+	if len(args) == 0 {
+		return []string{}
+	}
+	if len(args) == 1 {
+		return args
+	}
+
+	ret := []string{}
+	isDup := make(map[string]bool)
+	for _, arg := range args {
+		if isDup[arg] == true {
+			continue
+		}
+		ret = append(ret, arg)
+		isDup[arg] = true
+	}
+	return ret
 }

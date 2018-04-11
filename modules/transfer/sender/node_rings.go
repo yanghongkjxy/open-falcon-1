@@ -1,52 +1,28 @@
+// Copyright 2017 Xiaomi, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package sender
 
 import (
-	"github.com/open-falcon/transfer/g"
-	"stathat.com/c/consistent"
+	cutils "github.com/open-falcon/falcon-plus/common/utils"
+	"github.com/open-falcon/falcon-plus/modules/transfer/g"
+	rings "github.com/toolkits/consistent/rings"
 )
 
 func initNodeRings() {
 	cfg := g.Config()
 
-	JudgeNodeRing = newConsistentHashNodesRing(cfg.Judge.Replicas, KeysOfMap(cfg.Judge.Cluster))
-	GraphNodeRing = newConsistentHashNodesRing(cfg.Graph.Replicas, KeysOfMap(cfg.Graph.Cluster))
-}
-
-// TODO 考虑放到公共组件库,或utils库
-func KeysOfMap(m map[string]string) []string {
-	keys := make([]string, len(m))
-	i := 0
-	for key, _ := range m {
-		keys[i] = key
-		i++
-	}
-
-	return keys
-}
-
-// 一致性哈希环,用于管理服务器节点.
-type ConsistentHashNodeRing struct {
-	ring *consistent.Consistent
-}
-
-func newConsistentHashNodesRing(numberOfReplicas int, nodes []string) *ConsistentHashNodeRing {
-	ret := &ConsistentHashNodeRing{ring: consistent.New()}
-	ret.SetNumberOfReplicas(numberOfReplicas)
-	ret.SetNodes(nodes)
-	return ret
-}
-
-// 根据pk,获取node节点. chash(pk) -> node
-func (this *ConsistentHashNodeRing) GetNode(pk string) (string, error) {
-	return this.ring.Get(pk)
-}
-
-func (this *ConsistentHashNodeRing) SetNodes(nodes []string) {
-	for _, node := range nodes {
-		this.ring.Add(node)
-	}
-}
-
-func (this *ConsistentHashNodeRing) SetNumberOfReplicas(num int) {
-	this.ring.NumberOfReplicas = num
+	JudgeNodeRing = rings.NewConsistentHashNodesRing(int32(cfg.Judge.Replicas), cutils.KeysOfMap(cfg.Judge.Cluster))
+	GraphNodeRing = rings.NewConsistentHashNodesRing(int32(cfg.Graph.Replicas), cutils.KeysOfMap(cfg.Graph.Cluster))
 }

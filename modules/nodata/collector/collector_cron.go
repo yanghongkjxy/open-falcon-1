@@ -1,23 +1,35 @@
+// Copyright 2017 Xiaomi, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package collector
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"time"
 
-	cmodel "github.com/open-falcon/common/model"
-	cutils "github.com/open-falcon/common/utils"
+	cmodel "github.com/open-falcon/falcon-plus/common/model"
+	cutils "github.com/open-falcon/falcon-plus/common/utils"
 	tsema "github.com/toolkits/concurrent/semaphore"
 	tcron "github.com/toolkits/cron"
-	thttpclient "github.com/toolkits/http/httpclient"
 	ttime "github.com/toolkits/time"
 
-	"github.com/open-falcon/nodata/config"
-	"github.com/open-falcon/nodata/g"
+	"github.com/open-falcon/falcon-plus/common/sdk/requests"
+	"github.com/open-falcon/falcon-plus/modules/nodata/config"
+	"github.com/open-falcon/falcon-plus/modules/nodata/g"
+	"github.com/toolkits/net/httplib"
 )
 
 var (
@@ -79,7 +91,13 @@ func collectDataOnce() int {
 		sema.Acquire()
 		go func(keys []string, keySize int) {
 			defer sema.Release()
-			size, _ := fetchItemsAndStore(keys, keySize)
+			size, err := fetchItemsAndStore(keys, keySize)
+			if err != nil {
+				log.Printf("fetchItemAndStore fail, size:%v, error:%v", size, err)
+			}
+			if g.Config().Debug {
+				log.Printf("fetchItemAndStore keys:%v, key_size:%v, ret_size:%v", keys, keySize, size)
+			}
 			rch <- size
 		}(fetchKeys, fetchSize)
 
@@ -102,12 +120,6 @@ func fetchItemsAndStore(fetchKeys []string, fetchSize int) (size int, errt error
 		return
 	}
 
-	cfg := g.Config()
-	queryUlr := fmt.Sprintf("http://%s/graph/last", cfg.Query.QueryAddr)
-	hcli := thttpclient.GetHttpClient("nodata.collector",
-		time.Millisecond*time.Duration(cfg.Query.ConnectTimeout),
-		time.Millisecond*time.Duration(cfg.Query.RequestTimeout))
-
 	// form request args
 	args := make([]*cmodel.GraphLastParam, 0)
 	for _, key := range fetchKeys {
@@ -124,44 +136,10 @@ func fetchItemsAndStore(fetchKeys []string, fetchSize int) (size int, errt error
 	if len(args) < 1 {
 		return
 	}
-	argsBody, err := json.Marshal(args)
-	if err != nil {
-		log.Println(queryUlr+", format body error,", err)
-		errt = err
-		return
-	}
 
-	// fetch items
-	req, err := http.NewRequest("POST", queryUlr, bytes.NewBuffer(argsBody))
-	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	req.Header.Set("Connection", "close")
-	postResp, err := hcli.Do(req)
+	resp, err := queryLastPoints(args)
 	if err != nil {
-		log.Println(queryUlr+", post to dest error,", err)
-		errt = err
-		return
-	}
-	defer postResp.Body.Close()
-
-	if postResp.StatusCode/100 != 2 {
-		log.Println(queryUlr+", post to dest, bad response,", postResp.Body)
-		errt = fmt.Errorf("request failed, %s", postResp.Body)
-		return
-	}
-
-	body, err := ioutil.ReadAll(postResp.Body)
-	if err != nil {
-		log.Println(queryUlr+", read response error,", err)
-		errt = err
-		return
-	}
-
-	resp := []*cmodel.GraphLastResp{}
-	err = json.Unmarshal(body, &resp)
-	if err != nil {
-		log.Println(queryUlr+", unmarshal error,", err)
-		errt = err
-		return
+		return 0, err
 	}
 
 	// store items
@@ -175,4 +153,34 @@ func fetchItemsAndStore(fetchKeys []string, fetchSize int) (size int, errt error
 	}
 
 	return len(resp), nil
+}
+
+func queryLastPoints(param []*cmodel.GraphLastParam) (resp []*cmodel.GraphLastResp, err error) {
+	cfg := g.Config()
+	uri := fmt.Sprintf("%s/api/v1/graph/lastpoint", cfg.PlusApi.Addr)
+
+	var req *httplib.BeegoHttpRequest
+	headers := map[string]string{"Content-type": "application/json"}
+	req, err = requests.CurlPlus(uri, "POST", "nodata", cfg.PlusApi.Token,
+		headers, map[string]string{})
+
+	if err != nil {
+		return
+	}
+	req.SetTimeout(time.Duration(cfg.PlusApi.ConnectTimeout)*time.Millisecond,
+		time.Duration(cfg.PlusApi.RequestTimeout)*time.Millisecond)
+
+	b, err := json.Marshal(param)
+	if err != nil {
+		return
+	}
+
+	req.Body(b)
+
+	err = req.ToJson(&resp)
+	if err != nil {
+		return
+	}
+
+	return resp, nil
 }

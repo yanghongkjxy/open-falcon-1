@@ -1,15 +1,30 @@
+// Copyright 2017 Xiaomi, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package http
 
 import (
 	"encoding/json"
-	"log"
+	log "github.com/Sirupsen/logrus"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"time"
 
-	"github.com/open-falcon/graph/g"
-	"github.com/open-falcon/graph/rrdtool"
+	"github.com/gin-gonic/gin"
+	"github.com/open-falcon/falcon-plus/modules/graph/g"
+	"github.com/open-falcon/falcon-plus/modules/graph/rrdtool"
 )
 
 type Dto struct {
@@ -18,14 +33,16 @@ type Dto struct {
 }
 
 var Close_chan, Close_done_chan chan int
+var router *gin.Engine
 
 func init() {
+	router = gin.Default()
 	configCommonRoutes()
-	configDebugRoutes()
 	configProcRoutes()
 	configIndexRoutes()
 	Close_chan = make(chan int, 1)
 	Close_done_chan = make(chan int, 1)
+
 }
 
 func RenderJson(w http.ResponseWriter, v interface{}) {
@@ -78,37 +95,28 @@ func Start() {
 		return
 	}
 
-	if g.Config().Migrate.Enabled {
-		http.HandleFunc("/counter/migrate",
-			func(w http.ResponseWriter, r *http.Request) {
-				RenderDataJson(w, rrdtool.GetCounter())
-			})
-	}
+	router.GET("/api/v2/counter/migrate", func(c *gin.Context) {
+		cnt := rrdtool.GetCounter()
+		log.Debug("migrating counter:", cnt)
+		c.JSON(200, gin.H{"msg": "ok", "counter": cnt})
+	})
+
+	//compatible with open-falcon v0.1
+	router.GET("/counter/migrate", func(c *gin.Context) {
+		cnt := rrdtool.GetCounter()
+		log.Debug("migrating counter:", cnt)
+		c.JSON(200, gin.H{"msg": "ok", "counter": cnt})
+	})
 
 	addr := g.Config().Http.Listen
 	if addr == "" {
 		return
 	}
-	s := &http.Server{
-		Addr:           addr,
-		MaxHeaderBytes: 1 << 30,
-	}
-	log.Println("http listening", addr)
-
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		log.Fatalln(err)
-		return
-	}
-
-	l := ln.(*net.TCPListener)
-
-	go s.Serve(TcpKeepAliveListener{l})
+	go router.Run(addr)
 
 	select {
 	case <-Close_chan:
-		log.Println("http recv sigout and exit...")
-		l.Close()
+		log.Info("http recv sigout and exit...")
 		Close_done_chan <- 1
 		return
 	}

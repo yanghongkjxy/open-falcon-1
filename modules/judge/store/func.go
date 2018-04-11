@@ -1,8 +1,22 @@
+// Copyright 2017 Xiaomi, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package store
 
 import (
 	"fmt"
-	"github.com/open-falcon/common/model"
+	"github.com/open-falcon/falcon-plus/common/model"
 	"math"
 	"strconv"
 	"strings"
@@ -84,6 +98,35 @@ func (this AllFunction) Compute(L *SafeLinkedList) (vs []*model.HistoryData, lef
 	}
 
 	leftValue = vs[0].Value
+	return
+}
+
+type LookupFunction struct {
+	Function
+	Num        int
+	Limit      int
+	Operator   string
+	RightValue float64
+}
+
+func (this LookupFunction) Compute(L *SafeLinkedList) (vs []*model.HistoryData, leftValue float64, isTriggered bool, isEnough bool) {
+	vs, isEnough = L.HistoryData(this.Limit)
+	if !isEnough {
+		return
+	}
+
+	leftValue = vs[0].Value
+
+	for n, i := 0, 0; i < this.Limit; i++ {
+		if checkIsTriggered(vs[i].Value, this.Operator, this.RightValue) {
+			n++
+			if n == this.Num {
+				isTriggered = true
+				return
+			}
+		}
+	}
+
 	return
 }
 
@@ -206,29 +249,46 @@ func (this PDiffFunction) Compute(L *SafeLinkedList) (vs []*model.HistoryData, l
 	return
 }
 
+func atois(s string) (ret []int, err error) {
+	a := strings.Split(s, ",")
+	ret = make([]int, len(a))
+	for i, v := range a {
+		ret[i], err = strconv.Atoi(v)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
 // @str: e.g. all(#3) sum(#3) avg(#10) diff(#10)
 func ParseFuncFromString(str string, operator string, rightValue float64) (fn Function, err error) {
+	if str == "" {
+		return nil, fmt.Errorf("func can not be null!")
+	}
 	idx := strings.Index(str, "#")
-	limit, err := strconv.ParseInt(str[idx+1:len(str)-1], 10, 64)
+	args, err := atois(str[idx+1 : len(str)-1])
 	if err != nil {
 		return nil, err
 	}
 
 	switch str[:idx-1] {
 	case "max":
-		fn = &MaxFunction{Limit: int(limit), Operator: operator, RightValue: rightValue}
+		fn = &MaxFunction{Limit: args[0], Operator: operator, RightValue: rightValue}
 	case "min":
-		fn = &MinFunction{Limit: int(limit), Operator: operator, RightValue: rightValue}
+		fn = &MinFunction{Limit: args[0], Operator: operator, RightValue: rightValue}
 	case "all":
-		fn = &AllFunction{Limit: int(limit), Operator: operator, RightValue: rightValue}
+		fn = &AllFunction{Limit: args[0], Operator: operator, RightValue: rightValue}
 	case "sum":
-		fn = &SumFunction{Limit: int(limit), Operator: operator, RightValue: rightValue}
+		fn = &SumFunction{Limit: args[0], Operator: operator, RightValue: rightValue}
 	case "avg":
-		fn = &AvgFunction{Limit: int(limit), Operator: operator, RightValue: rightValue}
+		fn = &AvgFunction{Limit: args[0], Operator: operator, RightValue: rightValue}
 	case "diff":
-		fn = &DiffFunction{Limit: int(limit), Operator: operator, RightValue: rightValue}
+		fn = &DiffFunction{Limit: args[0], Operator: operator, RightValue: rightValue}
 	case "pdiff":
-		fn = &PDiffFunction{Limit: int(limit), Operator: operator, RightValue: rightValue}
+		fn = &PDiffFunction{Limit: args[0], Operator: operator, RightValue: rightValue}
+	case "lookup":
+		fn = &LookupFunction{Num: args[0], Limit: args[1], Operator: operator, RightValue: rightValue}
 	default:
 		err = fmt.Errorf("not_supported_method")
 	}

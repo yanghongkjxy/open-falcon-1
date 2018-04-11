@@ -1,45 +1,30 @@
 {
-    "log": "debug",
-    "company": "MI",
-    "http": {
-        "enabled": true,
-        "listen": "0.0.0.0:1234",
-        "cookie": ".example.com"
-    },
-    "cache": {
-        "enabled": true,
-        "redis": "172.17.0.2:6379",
-        "idle": 10,
-        "max": 1000,
-        "timeout": {
-            "conn": 10000,
-            "read": 5000,
-            "write": 5000
-        }
-    },
-    "salt": "",
-    "canRegister": true,
-    "ldap": {
-        "enabled": false,
-        "addr": "ldap.example.com:389"
-    },
-    "uic": {
-        "addr": "root:@tcp(172.17.0.3:3306)/uic?charset=utf8&loc=Asia%2FChongqing",
-        "idle": 10,
-        "max": 100
-    },
-    "shortcut": {
-        "falconPortal": "http://10.20.30.40:5050/",
-        "falconDashboard": "http://10.20.30.40:7070/",
-        "grafanaDashboard": "http://10.20.30.40:3001/",
-        "falconAlarm": "http://10.20.30.40:9912/"
-    },
-    "api": {
-        "key": "yourKey",
-        "redirect": "yourId||http://example.com/path_to_redirect/__TOKEN__",
-        "login": "https://example.com/path_to_login",
-        "access": "https://example.com/path_to_access",
-        "role": "https://example.com/path_to_role",
-        "logout": "https://example.com/path_to_logout"
-    }
+	"log_level": "debug",
+	"db": {
+		"falcon_portal": "%%MYSQL%%/falcon_portal?charset=utf8&parseTime=True&loc=Local",
+		"graph": "%%MYSQL%%/graph?charset=utf8&parseTime=True&loc=Local",
+		"uic": "%%MYSQL%%/uic?charset=utf8&parseTime=True&loc=Local",
+		"dashboard": "%%MYSQL%%/dashboard?charset=utf8&parseTime=True&loc=Local",
+		"alarms": "%%MYSQL%%/alarms?charset=utf8&parseTime=True&loc=Local",
+		"db_bug": true
+	},
+	"graphs": {
+		"cluster": {
+			"graph-00": "127.0.0.1:6070"
+		},
+		"max_conns": 100,
+		"max_idle": 100,
+		"conn_timeout": 1000,
+		"call_timeout": 5000,
+		"numberOfReplicas": 500
+	},
+	"metric_list_file": "./api/data/metric",
+	"web_port": "%%PLUS_API_HTTP%%",
+	"access_control": true,
+	"signup_disable": false,
+	"salt": "",
+	"skip_auth": false,
+	"default_token": "%%PLUS_API_DEFAULT_TOKEN%%",
+	"gen_doc": false,
+	"gen_doc_path": "doc/module.html"
 }

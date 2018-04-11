@@ -1,3 +1,17 @@
+// Copyright 2017 Xiaomi, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package rrdtool
 
 import (
@@ -7,12 +21,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	cmodel "github.com/open-falcon/common/model"
+	cmodel "github.com/open-falcon/falcon-plus/common/model"
 	"github.com/open-falcon/rrdlite"
 	"github.com/toolkits/file"
 
-	"github.com/open-falcon/graph/g"
-	"github.com/open-falcon/graph/store"
+	"github.com/open-falcon/falcon-plus/modules/graph/g"
+	"github.com/open-falcon/falcon-plus/modules/graph/store"
 )
 
 var (
@@ -74,27 +88,27 @@ func create(filename string, item *cmodel.GraphItem) error {
 
 	// 设置各种归档策略
 	// 1分钟一个点存 12小时
-	c.RRA("AVERAGE", 0.5, 1, RRA1PointCnt)
+	c.RRA("AVERAGE", 0, 1, RRA1PointCnt)
 
 	// 5m一个点存2d
-	c.RRA("AVERAGE", 0.5, 5, RRA5PointCnt)
-	c.RRA("MAX", 0.5, 5, RRA5PointCnt)
-	c.RRA("MIN", 0.5, 5, RRA5PointCnt)
+	c.RRA("AVERAGE", 0, 5, RRA5PointCnt)
+	c.RRA("MAX", 0, 5, RRA5PointCnt)
+	c.RRA("MIN", 0, 5, RRA5PointCnt)
 
 	// 20m一个点存7d
-	c.RRA("AVERAGE", 0.5, 20, RRA20PointCnt)
-	c.RRA("MAX", 0.5, 20, RRA20PointCnt)
-	c.RRA("MIN", 0.5, 20, RRA20PointCnt)
+	c.RRA("AVERAGE", 0, 20, RRA20PointCnt)
+	c.RRA("MAX", 0, 20, RRA20PointCnt)
+	c.RRA("MIN", 0, 20, RRA20PointCnt)
 
 	// 3小时一个点存3个月
-	c.RRA("AVERAGE", 0.5, 180, RRA180PointCnt)
-	c.RRA("MAX", 0.5, 180, RRA180PointCnt)
-	c.RRA("MIN", 0.5, 180, RRA180PointCnt)
+	c.RRA("AVERAGE", 0, 180, RRA180PointCnt)
+	c.RRA("MAX", 0, 180, RRA180PointCnt)
+	c.RRA("MIN", 0, 180, RRA180PointCnt)
 
 	// 12小时一个点存1year
-	c.RRA("AVERAGE", 0.5, 720, RRA720PointCnt)
-	c.RRA("MAX", 0.5, 720, RRA720PointCnt)
-	c.RRA("MIN", 0.5, 720, RRA720PointCnt)
+	c.RRA("AVERAGE", 0, 720, RRA720PointCnt)
+	c.RRA("MAX", 0, 720, RRA720PointCnt)
+	c.RRA("MIN", 0, 720, RRA720PointCnt)
 
 	return c.Create(true)
 }
@@ -142,7 +156,7 @@ func flushrrd(filename string, items []*cmodel.GraphItem) error {
 	return update(filename, items)
 }
 
-func ReadFile(filename string) ([]byte, error) {
+func ReadFile(filename, md5 string) ([]byte, error) {
 	done := make(chan error, 1)
 	task := &io_task_t{
 		method: IO_TASK_M_READ,
@@ -150,14 +164,14 @@ func ReadFile(filename string) ([]byte, error) {
 		done:   done,
 	}
 
-	io_task_chan <- task
+	io_task_chans[getIndex(md5)] <- task
 	err := <-done
 	return task.args.(*readfile_t).data, err
 }
 
-func FlushFile(filename string, items []*cmodel.GraphItem) error {
+func FlushFile(filename, md5 string, items []*cmodel.GraphItem) error {
 	done := make(chan error, 1)
-	io_task_chan <- &io_task_t{
+	io_task_chans[getIndex(md5)] <- &io_task_t{
 		method: IO_TASK_M_FLUSH,
 		args: &flushfile_t{
 			filename: filename,
@@ -169,7 +183,7 @@ func FlushFile(filename string, items []*cmodel.GraphItem) error {
 	return <-done
 }
 
-func Fetch(filename string, cf string, start, end int64, step int) ([]*cmodel.RRDData, error) {
+func Fetch(filename string, md5 string, cf string, start, end int64, step int) ([]*cmodel.RRDData, error) {
 	done := make(chan error, 1)
 	task := &io_task_t{
 		method: IO_TASK_M_FETCH,
@@ -182,7 +196,7 @@ func Fetch(filename string, cf string, start, end int64, step int) ([]*cmodel.RR
 		},
 		done: done,
 	}
-	io_task_chan <- task
+	io_task_chans[getIndex(md5)] <- task
 	err := <-done
 	return task.args.(*fetch_t).data, err
 }
@@ -231,7 +245,6 @@ func FlushAll(force bool) {
 }
 
 func CommitByKey(key string) {
-
 	md5, dsType, step, err := g.SplitRrdCacheKey(key)
 	if err != nil {
 		return
@@ -242,7 +255,7 @@ func CommitByKey(key string) {
 	if len(items) == 0 {
 		return
 	}
-	FlushFile(filename, items)
+	FlushFile(filename, md5, items)
 }
 
 func PullByKey(key string) {
@@ -292,8 +305,23 @@ func FlushRRD(idx int, force bool) {
 				atomic.StoreInt32(&flushrrd_timeout, 1)
 			}
 			PullByKey(key)
-		} else {
+		} else if force || shouldFlush(key) {
 			CommitByKey(key)
 		}
 	}
+}
+
+func shouldFlush(key string) bool {
+
+	if store.GraphItems.ItemCnt(key) >= g.FLUSH_MIN_COUNT {
+		return true
+	}
+
+	deadline := time.Now().Unix() - int64(g.FLUSH_MAX_WAIT)
+	back := store.GraphItems.Back(key)
+	if back != nil && back.Timestamp <= deadline {
+		return true
+	}
+
+	return false
 }
